@@ -1,0 +1,63 @@
+{
+  "name": "@scene-release/oracle-ify",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "oracle-ify": "dist/node.cjs"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.cjs"
+    },
+    "./cli": {
+      "import": "./dist/node.mjs",
+      "require": "./dist/node.cjs"
+    }
+  },
+  "main": "./dist/browser.cjs",
+  "module": "./dist/browser.mjs",
+  "types": "./dist/browser.d.ts",
+  "scripts": {
+    "start": "node dist/node.cjs",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "Converts Images To ASCII",
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.69",
+    "asciify-image": "^0.1.10",
+    "commander": "^13.1.0",
+    "figlet": "^1.8.1",
+    "jimp": "^1.6.0",
+    "sharp": "^0.34.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/figlet": "^1.7.0",
+    "@types/node": "^22.14.1",
+    "rollup": "^4.40.0",
+    "tsup": "^8.4.0"
+  },
+  "tsup": {
+    "entry": [
+      "src/browser.ts",
+      "src/node.ts"
+    ],
+    "format": [
+      "esm",
+      "cjs"
+    ],
+    "dts": true,
+    "clean": true,
+    "splitting": false,
+    "sourcemap": true,
+    "target": "node20",
+    "outDir": "dist"
+  }
+}

@@ -1,0 +1,127 @@
+@import "tailwindcss";
+@layer base {
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    min-width: 100vw;
+    --text-title: 20px;
+  }
+
+  body.theme-dark {
+    --color-background: #000000;
+    --color-text: #ffffff;
+    --color-link: #0ff;
+    --color-highlight: #ff0000;
+    --color-muted: #cccccc;
+    --color-signature: gray;
+
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: monospace;
+  }
+
+  body.theme-light {
+    --color-background: #ffffff;
+    --color-text: #000000;
+    --color-link: #0ff;
+    --color-highlight: #ff0000;
+    --color-muted: #999999;
+    --color-signature: gray;
+
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: monospace;
+  }
+
+  .app-container {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    @apply max-w-screen-xl mx-auto p-8 text-base;
+  }
+
+  .title {
+    text-align: center;
+    font-size: var(--text-title, 20px);
+    margin-bottom: 2rem;
+  }
+
+  .ascii-art {
+    @apply text-center mb-8;
+  }
+
+  .signature-block {
+    border-top: 1px dashed var(--color-signature);
+    @apply pt-4;
+  }
+
+  .koans {
+    color: var(--color-muted);
+    @apply mt-4;
+  }
+
+  .highlight {
+    color: var(--color-highlight);
+  }
+
+  a {
+    color: var(--color-link);
+    @apply no-underline;
+  }
+}@import "tailwindcss";
+@layer base {
+  body.theme-dark {
+    --color-background: #000000;
+    --color-text: #ffffff;
+    --color-link: #0ff;
+    --color-highlight: #ff0000;
+    --color-muted: #cccccc;
+    --color-signature: gray;
+    @apply font-mono;
+  }
+
+  body.theme-light {
+    --color-background: #ffffff;
+    --color-text: #000000;
+    --color-link: #0ff;
+    --color-highlight: #ff0000;
+    --color-muted: #999999;
+    --color-signature: gray;
+    @apply font-mono;
+  }
+
+  .app-container {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    @apply max-w-screen-xl mx-auto p-8 text-base;
+  }
+
+  .title {
+    text-align: center;
+    font-size: var(--text-title, 20px);
+    margin-bottom: 2rem;
+  }
+
+  .ascii-art {
+    @apply text-center mb-8;
+  }
+
+  .signature-block {
+    border-top: 1px dashed var(--color-signature);
+    @apply pt-4;
+  }
+
+  .koans {
+    color: var(--color-muted);
+    @apply mt-4;
+  }
+
+  .highlight {
+    color: var(--color-highlight);
+  }
+
+  a {
+    color: var(--color-link);
+    @apply no-underline;
+  }
+}

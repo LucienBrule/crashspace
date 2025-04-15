@@ -1,6 +1,9 @@
 {
   "private": true,
   "scripts": {
+    "nfo:dev": "pnpm --filter nfo dev",
+    "oracle-ify": "pnpm --filter oracle-ify start",
+    "oracle-ify:build": "pnpm --filter oracle-ify build",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
@@ -12,8 +15,8 @@
     "preview-storybook": "turbo run preview-storybook"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.1",
-    "prettier": "^3.2.5",
+    "@changesets/cli": "^2.29.1",
+    "prettier": "^3.5.3",
     "turbo": "^2.5.0"
   },
   "packageManager": "pnpm@8.15.6",

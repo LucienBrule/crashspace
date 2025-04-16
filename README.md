@@ -1,208 +1,172 @@
-# Turborepo Design System Starter
+# Diff Until It Breaks
 
-This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
+## A Swift SIGTRAP Journey Into ChatGPT’s Patch Pipeline
 
-This guide explains how to use a React design system starter powered by:
+Lucien Brulé — lucien@brule.io
 
-- 🏎 [Turborepo](https://turbo.build/repo) — High-performance build system for Monorepos
-- 🚀 [React](https://reactjs.org/) — JavaScript library for user interfaces
-- 🛠 [Tsup](https://github.com/egoist/tsup) — TypeScript bundler powered by esbuild
-- 📖 [Storybook](https://storybook.js.org/) — UI component environment powered by Vite
+---
 
-As well as a few others tools preconfigured:
+### Overview
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-- [Changesets](https://github.com/changesets/changesets) for managing versioning and changelogs
-- [GitHub Actions](https://github.com/changesets/action) for fully automated package publishing
+While running diff-based tooling inside the ChatGPT macOS app, I stumbled into a crash.
 
-## Using this example
+Then I hit it again. And again.  
+Eventually, I put LLDB in one terminal, Ghidra in the other, and ChatGPT right in the middle.
 
-Run the following command:
+I wasn’t trying to crash ChatGPT. I was trying to make ASCII art and vibe. Then it broke.
 
-```sh
-npx create-turbo@latest -e design-system
+---
+
+### The Crash
+
+```
+Exception Type:  EXC_BREAKPOINT (SIGTRAP)  
+Termination Reason:  Trace/BPT trap: 5  
+Faulting Instruction:  0x1092ef078 (brk #0x1)  
+Thread:  12  
+Function:  OAIDiff.DiffUtilities.applyPatch(...)  
 ```
 
-### Useful Commands
+Triggered while applying tool-call-rich diffs in a canvas view using the “oboe” workflow.  
+This appears to be Swift deliberately tripping over a state inconsistency — not a segfault, but a `brk #0x1` internal
+fail-fast.
 
-- `pnpm build` - Build all packages, including the Storybook site
-- `pnpm dev` - Run all packages locally and preview with Storybook
-- `pnpm lint` - Lint all packages
-- `pnpm changeset` - Generate a changeset
-- `pnpm clean` - Clean up all `node_modules` and `dist` folders (runs each package's clean script)
+---
 
-## Turborepo
+### Repro Steps
 
-[Turborepo](https://turbo.build/repo) is a high-performance build system for JavaScript and TypeScript codebases. It was designed after the workflows used by massive software engineering organizations to ship code at scale. Turborepo abstracts the complex configuration needed for monorepos and provides fast, incremental builds with zero-configuration remote caching.
+1. Open a patch with lots of tool calls
+2. Open canvas diff view (oboe)
+3. Scroll + edit the patch while the canvas is rendering
+4. Wait for layout reflows mid-patch
+5. SIGTRAP lands
 
-Using Turborepo simplifies managing your design system monorepo, as you can have a single lint, build, test, and release process for all packages. [Learn more](https://vercel.com/blog/monorepos-are-changing-how-teams-build-software) about how monorepos improve your development workflow.
+---
 
-## Apps & Packages
+### RE Summary
 
-This Turborepo includes the following packages and applications:
+Using LLDB and Ghidra, I confirmed the `brk` instruction is part of a Swift assertion pathway.  
+Two distinct failpoints observed:
 
-- `apps/docs`: Component documentation site with Storybook
-- `packages/ui`: Core React components
-- `packages/typescript-config`: Shared `tsconfig.json`s used throughout the Turborepo
-- `packages/eslint-config`: ESLint preset
+- `0x181B078` — triggered on `tbnz x28, #0x3f` (bitmask test — possibly a nil or flag check)
+- `0x58B7078` — matches earlier crashes, likely in the patch pipeline
 
-Each package and app is 100% [TypeScript](https://www.typescriptlang.org/). Workspaces enables us to "hoist" dependencies that are shared between packages to the root `package.json`. This means smaller `node_modules` folders and a better local dev experience. To install a dependency for the entire monorepo, use the `-w` workspaces flag with `pnpm add`.
+In both cases, Swift Concurrency tasks running on background threads were accessing state while `Thread 0` (main) was
+processing Core Animation commits and layout cycles.
 
-This example sets up your `.gitignore` to exclude all generated files, other folders like `node_modules` used to store your dependencies.
+Stack traces from AppKit and QuartzCore suggest intense layout churn:
 
-### Compilation
+- CA::Layer::collect_layers_()
+- NSViewDrawRect
+- _recursiveDisplayAllDirtyWithLock
 
-To make the ui library code work across all browsers, we need to compile the raw TypeScript and React code to plain JavaScript. We can accomplish this with `tsup`, which uses `esbuild` to greatly improve performance.
+The exact diff logic hit was OAIDiff.DiffUtilities.applyPatch(...), likely a Swift-side patch engine for tool outputs
 
-Running `pnpm build` from the root of the Turborepo will run the `build` command defined in each package's `package.json` file. Turborepo runs each `build` in parallel and caches & hashes the output to speed up future builds.
+---
 
-For `@scene-release/ui`, the `build` command is equivalent to the following:
+### What’s Happening?
 
-```bash
-tsup src/*.tsx --format esm,cjs --dts --external react
+A background Swift task (probably patch application or diff rendering logic) is accessing shared state that's:
+
+- Being mutated by the UI thread
+- Or invalidated mid-operation
+
+Swift's runtime detects this, panics, and hits a `brk` to prevent undefined behavior.
+
+This isn't memory corruption. It’s *prevention of* memory corruption.
+
+---
+
+### Is It a Vulnerability?
+
+Unlikely.  
+This isn’t exploitable under normal constraints.
+
+But it *is*:
+
+- A reliability landmine
+- A complex UI race
+- And a pain to debug from the outside in
+
+---
+
+### Appendix: LLDB Register Dump (Crash State)
+
+```
+x0 = type metadata for Foundation.CharacterSet  
+x28 = invalid flag check (tbnz failure)  
+x26 = _swiftEmptyArrayStorage  
+sp = 0x000000034b9723a0  
+lr = 0x0000000107282788  
+pc = 0x0000000107283078  
 ```
 
-`tsup` compiles all of the components in the design system individually, into both ES Modules and CommonJS formats as well as their TypeScript types. The `package.json` for `@scene-release/ui` then instructs the consumer to select the correct format:
+---
 
-```json:ui/package.json
-{
-  "name": "@scene-release/ui",
-  "version": "0.0.0",
-  "sideEffects": false,
-  "exports":{
-    "./button": {
-      "types": "./src/button.tsx",
-      "import": "./dist/button.mjs",
-      "require": "./dist/button.js"
-    }
-  }
-}
-```
+### Notes from the Frontline
 
-Run `pnpm build` to confirm compilation is working correctly. You should see a folder `ui/dist` which contains the compiled output.
+> "oboe is trash just give my man ripgrep. or cop out and give ME MCP ffs!"  
+> — Lucien Brulé
 
-```bash
-ui
-└── dist
-    ├── button.d.ts  <-- Types
-    ├── button.js    <-- CommonJS version
-    ├── button.mjs   <-- ES Modules version
-    └── button.d.mts   <-- ES Modules version with Types
-```
+> "Legendary. I’d frame that on the team wall if I were OpenAI."  
+> — ChatGPT4o
 
-## Components
+---
 
-Each file inside of `ui/src` is a component inside our design system. For example:
+### Contact
 
-```tsx:ui/src/Button.tsx
-import * as React from 'react';
+Lucien Brulé  
+lucien@brule.io  
+Signal/iMessage: 818-636-3761  
+Relocating to SF from NYC.  
+Would love to talk about fixing this properly. With source.
 
-export interface ButtonProps {
-  children: React.ReactNode;
-}
+---
 
-export function Button(props: ButtonProps) {
-  return <button>{props.children}</button>;
-}
+### Epilogue
 
-Button.displayName = 'Button';
-```
+This crash is fun. This bug is beautiful.  
+And yeah, if I had the source… I’d already be done.
 
-When adding a new file, ensure that its specifier is defined in `package.json` file:
+---
 
-```json:ui/package.json
-{
-  "name": "@scene-release/ui",
-  "version": "0.0.0",
-  "sideEffects": false,
-  "exports":{
-    "./button": {
-      "types": "./src/button.tsx",
-      "import": "./dist/button.mjs",
-      "require": "./dist/button.js"
-    }
-    // Add new component exports here
-  }
-}
-```
+**Disclaimer**
 
-## Storybook
 
-Storybook provides us with an interactive UI playground for our components. This allows us to preview our components in the browser and instantly see changes when developing locally. This example preconfigures Storybook to:
+The above README.md is written in whole by ChatGPT4o, with the consent of me, Lucien.
+The contents of this repository and my research were carried out in good faith. My goal was to genuinely
+determine the root cause of a recurring crash encountered during legitimate use of the ChatGPT application, specifically
+concerning the patch application functionality ("oboe").
+This information is shared for technical and educational purposes only, with the aim of contributing to the stability
+and improvement of the product. The techniques employed were standard reverse engineering practices applied to the
+client-side application. There is no intention to violate any laws or terms of service, nor to encourage or enable any
+malicious activities. The findings presented herein should be used responsibly and ethically. The author assumes no
+liability for any misuse of this information by third parties.
 
-- Use Vite to bundle stories instantly (in milliseconds)
-- Automatically find any stories inside the `stories/` folder
-- Support using module path aliases like `@scene-release/ui` for imports
-- Write MDX for component documentation pages
 
-For example, here's the included Story for our `Button` component:
+## Reproduction
 
-```js:apps/docs/stories/button.stories.mdx
-import { Button } from '@scene-release/ui/button';
-import { Meta, Story, Preview, Props } from '@storybook/addon-docs/blocks';
+You might be wondering, why is there a super bloated turbo / pnpm mono repo application that generates ascii art included in this readme
+well, it's the reproducer. I honestly just wanted to try something out with web dev (unrelated to to the above findings). I figured, the most
+helpful thing to do would be, beyond providing logs and coredumps to the right people, would be to just publish the repo I can reproduce the crash on.
+Which this repo somehow can, reliably reproduce crashes on with a specific request with certain files. 
 
-<Meta title="Components/Button" component={Button} />
+You can find out more about how to do that in [REPRO.md](./REPRO.md)
 
-# Button
+## NFO / Oracle-ify
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec euismod, nisl eget consectetur tempor, nisl nunc egestas nisi, euismod aliquam nisl nunc euismod.
+If you were curious about the actual (unrelated to the crash) application code, here's a quick rundown:
 
-## Props
+**packages/oracle-ify**: A library that works in nodejs and in the browser, renders images to ascii, supports a number of transforms.
 
-<Props of={Box} />
+**apps/nfo*** : A demo scene inspired web application that uses vite tailwind and the new react router, consumes oracle-ify as a package. runs it  in browser, allows users to generate their own ascii art. 
 
-## Examples
+### Why?
 
-<Preview>
-  <Story name="Default">
-    <Button>Hello</Button>
-  </Story>
-</Preview>
-```
+It was a side quest / mental vacation project I decided to dev something because I had a *good idea* about how I could make something for a personal brand.
+Stemming from said *good idea* was the realization that LLMS are pretty bad at generating ASCII art, or SVG art. But they Can do text to image prompts of good ascii art. 
+So one thing led to another and I made a prototype of something that might in a future form enable them to make decent ascii art. That's it really.
 
-This example includes a few helpful Storybook scripts:
+*note* The released version of this might be in a broken state, I wanted to not touch the reproducible app, it's licensed under MIT feel free to do as you will with it. 
 
-- `pnpm dev`: Starts Storybook in dev mode with hot reloading at `localhost:6006`
-- `pnpm build`: Builds the Storybook UI and generates the static HTML files
-- `pnpm preview-storybook`: Starts a local server to view the generated Storybook UI
 
-## Versioning & Publishing Packages
-
-This example uses [Changesets](https://github.com/changesets/changesets) to manage versions, create changelogs, and publish to npm. It's preconfigured so you can start publishing packages immediately.
-
-You'll need to create an `NPM_TOKEN` and `GITHUB_TOKEN` and add it to your GitHub repository settings to enable access to npm. It's also worth installing the [Changesets bot](https://github.com/apps/changeset-bot) on your repository.
-
-### Generating the Changelog
-
-To generate your changelog, run `pnpm changeset` locally:
-
-1. **Which packages would you like to include?** – This shows which packages and changed and which have remained the same. By default, no packages are included. Press `space` to select the packages you want to include in the `changeset`.
-1. **Which packages should have a major bump?** – Press `space` to select the packages you want to bump versions for.
-1. If doing the first major version, confirm you want to release.
-1. Write a summary for the changes.
-1. Confirm the changeset looks as expected.
-1. A new Markdown file will be created in the `changeset` folder with the summary and a list of the packages included.
-
-### Releasing
-
-When you push your code to GitHub, the [GitHub Action](https://github.com/changesets/action) will run the `release` script defined in the root `package.json`:
-
-```bash
-turbo run build --filter=docs^... && changeset publish
-```
-
-Turborepo runs the `build` script for all publishable packages (excluding docs) and publishes the packages to npm. By default, this example includes `scene-release` as the npm organization. To change this, do the following:
-
-- Rename folders in `packages/*` to replace `scene-release` with your desired scope
-- Search and replace `scene-release` with your desired scope
-- Re-run `pnpm install`
-
-To publish packages to a private npm organization scope, **remove** the following from each of the `package.json`'s
-
-```diff
-- "publishConfig": {
--  "access": "public"
-- },
-```

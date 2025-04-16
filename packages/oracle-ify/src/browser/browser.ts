@@ -1,4 +1,5 @@
-import { imageToAscii, ConvertOptions } from './core';
+import {imageToAscii, preprocessImage} from './core';
+import { ConvertOptions } from '@/shared/types';
 
 export async function asciiFromCanvas(
   canvas: HTMLCanvasElement,
@@ -8,6 +9,10 @@ export async function asciiFromCanvas(
   if (!ctx) throw new Error('Unable to get canvas context');
   const width = options.width;
   const height = options.height ?? Math.floor(canvas.height * (width / canvas.width));
+
+  // Call preprocessImage before converting to ASCII
+  preprocessImage(ctx, width, height, options);
+
   return imageToAscii(ctx, width, height, options);
 }
 

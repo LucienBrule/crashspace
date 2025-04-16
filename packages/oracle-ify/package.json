@@ -7,17 +7,17 @@
   },
   "exports": {
     ".": {
-      "import": "./dist/browser.mjs",
-      "require": "./dist/browser.cjs"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./cli": {
       "import": "./dist/node.mjs",
       "require": "./dist/node.cjs"
     }
   },
-  "main": "./dist/browser.cjs",
-  "module": "./dist/browser.mjs",
-  "types": "./dist/browser.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "start": "node dist/node.cjs",
     "build": "tsup",

@@ -1,20 +1,9 @@
-import './App.css'
-import SceneRelease from '@/components/SceneRelease/SceneRelease'
-import { ThemeProvider } from './theme/ThemeProvider'
-import Layout from "@/Layout";
+// apps/nfo/src/App.tsx
+import { RouterProvider, createBrowserRouter } from 'react-router-dom';
+import { routes } from './routes';
 
-function App() {
-    return (
-        <ThemeProvider>
-            <div className="min-h-screen w-full">
-                <Layout>
-                    <div className="app-container">
-                        <SceneRelease />
-                    </div>
-                </Layout>
-            </div>
-        </ThemeProvider>
-    )
+const router = createBrowserRouter(routes);
+
+export default function App() {
+    return <RouterProvider router={router} />;
 }
-
-export default App
